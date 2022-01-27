@@ -1,8 +1,7 @@
 {
-  "name": "Appilepsie",
+  "name": "mobile",
   "integrations": {
     "capacitor": {}
   },
-  "type": "react",
-  "id": "408e52c6"
+  "type": "angular"
 }
