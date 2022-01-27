@@ -23,5 +23,9 @@ Le système se compose de quatre parties:
 
 ## Scenarios Traités
 
-  
+  - Au début de l'examen, l'utilisateur doit avoir un écran en vue pour vérifier que la caméra de vision est correctement positionnée. 
+  - Une alarme se déclenche si le système détecte plus d'un visage ou un visage différent de l'étudiant.
+  - Une alarme se déclanche si le système détecte plus d'un écran.
+  - Une alame se déclanche si le sysème détecte un visage à partir de la caméra de vision. 
+  - Dans tous les cas où une alarme s'est déclanché on stocke les données selon les quels l'alarme est déclanché (photo, enregistrement, etc.)
  
