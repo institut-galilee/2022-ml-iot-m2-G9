@@ -2,6 +2,7 @@ import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angula
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
 import { interval, Subject } from 'rxjs';
+import Alert, { AlertType } from './alert.interface';
 
 
 interface Prediction {
@@ -10,6 +11,8 @@ interface Prediction {
   score: number;
 
 }
+
+
 
 @Component({
   selector: 'app-object-recognition',
@@ -24,11 +27,11 @@ export class ObjectRecognitionComponent implements AfterViewInit {
 
 
 
-  detectionRate = 25;
+  detectionRate = 10;
   detectionInterval = interval(1000 / this.detectionRate);
-  onPredicitionsObserver = new Subject<any>();
-  onAlertsObserver = new Subject<any>();
-
+  onPredicitionsObserver = new Subject<Prediction>();
+  onAlertsObserver = new Subject<Alert>();
+  isScreenInView = new Subject<boolean>();
   constructor() { }
   ngAfterViewInit(): void {
 
@@ -40,7 +43,7 @@ export class ObjectRecognitionComponent implements AfterViewInit {
         video: {
           facingMode: 'user',
           aspectRatio: 1.7,
-          frameRate: 25
+          frameRate: 30
         }
       })
       .then(stream => {
@@ -71,16 +74,67 @@ export class ObjectRecognitionComponent implements AfterViewInit {
   }
 
   analyzePredictions(predictions: Prediction[]) {
-    predictions.forEach(prediction => this.onAlertsObserver.next(prediction));
+
+    // analyze how many screen in the view
+    const screenClasses = ['cell phone', 'tv', 'laptop', 'mobile', 'screen'];
+
+
+    const screenInView = predictions.filter(e => screenClasses.includes(e.class)).length;
+
+    if (screenInView === 0) { // no screen in the view
+      this.isScreenInView.next(false);
+    } else if (screenInView === 1) { // only one screen in the view
+      this.isScreenInView.next(true);
+    } else {  // multiple screen in the view
+      this.onAlertsObserver.next({ type: AlertType.multipleScreen });
+    }
+
+
+    // analyze how many person in the view
+
+    const personClasses = ['person'];
+
+    const personInView = predictions.filter(e => personClasses.includes(e.class)).length;
+    if (personInView > 0) {
+      this.onAlertsObserver.next({ type: AlertType.person });
+    }
+
+
+
+
   }
+
+
+  getScreenshot() {
+
+
+    const video = this.video.nativeElement;
+    const scale = 1;
+    const canvas = document.createElement('canvas');
+    canvas.width = video.clientWidth * scale;
+    canvas.height = video.clientHeight * scale;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+
+    return new Promise((res, rej) => {
+      canvas.toBlob((blob) => {
+        res(blob);
+      }, 'image/png');
+    });
+
+  }
+
   onPredictions(predictions: Prediction[]) {
     this.renderPredictions(predictions);
     this.analyzePredictions(predictions);
 
   }
-  onAlert(predictionMeta: Prediction) {
+  async onAlert(predictionMeta: Alert) {
 
-    console.log('@alert ', predictionMeta);
+    const img = await this.getScreenshot();
+    const url = URL.createObjectURL(img);
+
+
   }
   initDetection(model) {
 
