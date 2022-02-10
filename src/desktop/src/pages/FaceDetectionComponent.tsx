@@ -3,6 +3,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './FaceDetectionComponent.css';
 import * as faceapi from 'face-api.js';
+import { resizeResults } from 'face-api.js';
 
 
 class FaceDetectionComponent extends React.Component {
@@ -61,7 +62,7 @@ class FaceDetectionComponent extends React.Component {
   loadLabeledImages() {
     console.log("label image")
     //const labels = ['Black Widow', 'Captain America', 'Hawkeye' , 'Jim Rhodes', 'Tony Stark', 'Thor', 'Captain Marvel']
-    const labels = ['chaima' , 'chaima2'] // for WebCam
+    const labels = ['chaima' , 'chaima2','leo'] // for WebCam
     return Promise.all(
 
       labels.map(async (label) => {
@@ -80,10 +81,11 @@ class FaceDetectionComponent extends React.Component {
 
           console.log(label + i + JSON.stringify(detections))
           descriptions.push(detections.descriptor)
-        }
+       
         console.log('Faces Loaded |');
-
+        document.body.append(label+' Faces Loaded | ')
         return new faceapi.LabeledFaceDescriptors(label, descriptions)
+      }
       })
     )
   }
@@ -92,9 +94,9 @@ class FaceDetectionComponent extends React.Component {
     console.log(" recognizeFaces() ")
     const labeledDescriptors = await this.loadLabeledImages()
     console.log("labeledDescriptors")
-    const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.2)
+    const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5)
 
-
+    console.log(labeledDescriptors.values.toString)
     console.log("addacitionlisteneer")
     const video = this.videoRef.current
     console.log(video)
@@ -104,27 +106,43 @@ class FaceDetectionComponent extends React.Component {
     //@ts-ignore
     const displaySize = { width: video.clientWidth, height: video.clientHeight }
     //faceapi.matchDimensions(canvas, displaySize)
-
+    
 
 
     setInterval(async () => {
       //@ts-ignore
       const detections = await faceapi.detectAllFaces(video).withFaceLandmarks().withFaceDescriptors()
-
+      //number of persons
+      // we will send this information each 10 seconde 
+      console.log(detections.length);
+      
       const resizedDetections = faceapi.resizeResults(detections, displaySize)
       //@ts-ignore
       canvas.getContext('2d').clearRect(0, 0, canvas.width, canvas.height)
 
       const results = resizedDetections.map((d) => {
-        return faceMatcher.findBestMatch(d.descriptor)
-      })
+        return faceMatcher.matchDescriptor(d.descriptor)
+    })
+    //CHAIMA
+
+  
+    
+      
       console.log("starting drawing")
       results.forEach((result, i) => {
         console.log("drawing")
+        console.log('result ==>',results );
+        
         const box = resizedDetections[i].detection.box
-        const drawBox = new faceapi.draw.DrawBox(box, { label: result.toString() })
+
+        const drawBox = new faceapi.draw.DrawBox(box , {label: results.toString()})
+      
         drawBox.draw(canvas)
+        
+        
+
       })
+
     }, 100)
 
 
