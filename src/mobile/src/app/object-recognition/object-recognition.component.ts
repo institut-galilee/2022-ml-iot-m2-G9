@@ -1,8 +1,9 @@
 import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
-import { interval, Subject } from 'rxjs';
+import { interval , Subject, timer } from 'rxjs';
 import Alert, { AlertType } from './alert.interface';
+import {  delay, debounce } from 'rxjs/operators';
 
 
 interface Prediction {
@@ -23,15 +24,16 @@ export class ObjectRecognitionComponent implements AfterViewInit {
 
   @ViewChild('video') video: ElementRef;
   @ViewChild('canvas') canvas: ElementRef;
+  @ViewChild('alertImage') alertImage: ElementRef;
 
-
-
+  hasAlert = false;
 
   detectionRate = 10;
   detectionInterval = interval(1000 / this.detectionRate);
   onPredicitionsObserver = new Subject<Prediction>();
   onAlertsObserver = new Subject<Alert>();
   isScreenInView = new Subject<boolean>();
+  clearAlertObserver = new Subject<void>();
   constructor() { }
   ngAfterViewInit(): void {
 
@@ -86,7 +88,7 @@ export class ObjectRecognitionComponent implements AfterViewInit {
     } else if (screenInView === 1) { // only one screen in the view
       this.isScreenInView.next(true);
     } else {  // multiple screen in the view
-      this.onAlertsObserver.next({ type: AlertType.multipleScreen });
+      this.onAlertsObserver.next({ type: AlertType.multipleScreen, sessionId: '' });
     }
 
 
@@ -96,16 +98,14 @@ export class ObjectRecognitionComponent implements AfterViewInit {
 
     const personInView = predictions.filter(e => personClasses.includes(e.class)).length;
     if (personInView > 0) {
-      this.onAlertsObserver.next({ type: AlertType.person });
+      this.onAlertsObserver.next({ type: AlertType.person, sessionId: '' });
     }
-
-
 
 
   }
 
 
-  getScreenshot() {
+  getScreenshot(): Promise<Blob> {
 
 
     const video = this.video.nativeElement;
@@ -129,10 +129,17 @@ export class ObjectRecognitionComponent implements AfterViewInit {
     this.analyzePredictions(predictions);
 
   }
+  clearAlert() {
+    this.hasAlert = false;
+  }
   async onAlert(predictionMeta: Alert) {
 
+    this.hasAlert = true;
+    this.clearAlertObserver.next();
+
     const img = await this.getScreenshot();
-    const url = URL.createObjectURL(img);
+
+    this.alertImage.nativeElement.src = URL.createObjectURL(img);
 
 
   }
@@ -143,11 +150,11 @@ export class ObjectRecognitionComponent implements AfterViewInit {
     });
     this.onPredicitionsObserver.subscribe(this.onPredictions.bind(this));
     this.onAlertsObserver.subscribe(this.onAlert.bind(this));
+    this.clearAlertObserver.pipe(debounce(() => timer(200)), delay(500)).subscribe(this.clearAlert.bind(this));
   }
 
 
   detectFrame(video, model) {
-
     model.detect(video).then(predictions => {
       this.onPredicitionsObserver.next(predictions);
     });

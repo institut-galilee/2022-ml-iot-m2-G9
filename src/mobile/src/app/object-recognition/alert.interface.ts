@@ -1,7 +1,10 @@
 export enum AlertType {
-    multipleScreen = 'multiple-screen',
-    person = 'person'
+    multipleScreen = 'multiple-screen-view',
+    person = 'person-view'
 }
 export default interface Alert {
     type: AlertType;
+    sessionId: string;
+    meta?: any;
+
 }

@@ -2,7 +2,10 @@
   object-recognition works!
 </p>
 
-<div class="container">
+<div class="container" [ngClass]="{ danger : hasAlert }">
   <video class="video" id="video" #video></video>
   <canvas id="canvas" #canvas></canvas>
+</div>
+<div class="alert-container">
+  <img id="alert-image" #alertImage/> 
 </div>
