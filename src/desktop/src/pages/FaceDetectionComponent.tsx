@@ -10,7 +10,7 @@ import {
 } from "face-api.js";
 import * as service from "../default-service";
 import { match } from "assert";
-import { debounce, delay, interval, Subject, timer } from "rxjs";
+import { debounce, delay, interval, Subject, throttleTime, timer } from "rxjs";
 import Alert, { AlertType } from "../alert.interface";
 
 class FaceDetectionComponent extends React.Component<any, any> {
@@ -20,7 +20,7 @@ class FaceDetectionComponent extends React.Component<any, any> {
 
   detectionPerSecond = 10; // run 10 detection per second
   detectionInterval = interval(1000 / this.detectionPerSecond); // how many detections to run per second
-  alertsPerMinute = 1000; // how many alerts to report per minute
+  alertsPerMinute = 10; // how many alerts to report per minute
   onAlertsObserver = new Subject<Alert>();
   clearAlertObserver = new Subject<void>(); // used to toggle alert css class
 
@@ -52,16 +52,14 @@ class FaceDetectionComponent extends React.Component<any, any> {
     const video = this.videoRef.current; // curent;
     video.srcObject = stream;
     video.play();
-    console.log("recong");
 
     this.initFaceMatcher();
     this.onAlertsObserver
-      .pipe(debounce(() => timer((60 * 1000) / this.alertsPerMinute)))
+      .pipe(throttleTime((60 * 1000) / this.alertsPerMinute))
       .subscribe(this.onAlert.bind(this));
+
     this.clearAlertObserver
-      .pipe(
-        delay(500)
-      )
+      .pipe(delay(500))
       .subscribe(this.clearAlert.bind(this));
   }
 
@@ -69,8 +67,8 @@ class FaceDetectionComponent extends React.Component<any, any> {
     const video = this.videoRef.current;
     const scale = 1;
     const canvas = document.createElement("canvas");
-    canvas.width = video.clientWidth * scale;
-    canvas.height = video.clientHeight * scale;
+    canvas.width = 256;
+    canvas.height = (video.clientHeight / video.clientWidth) * canvas.width;
     canvas
       .getContext("2d")
       ?.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -79,16 +77,17 @@ class FaceDetectionComponent extends React.Component<any, any> {
       canvas.toBlob((blob) => {
         if (blob === null) rej();
         else res(blob);
-      }, "image/png");
+      }, "image/jpg");
     });
   }
 
-  async onAlert(predictionMeta: Alert) {
+  async onAlert(alert: Alert) {
     this.setState({ hasAlert: true });
 
-    const img = await this.getScreenshot();
-
-    //this.alertImage.nativeElement.src = URL.createObjectURL(img);
+    try {
+      const img = await this.getScreenshot();
+      await service.registerEvent(this.session.id, alert, img);
+    } catch (ex) {}
   }
 
   async loadStudentFaceDescriptor() {
@@ -147,7 +146,6 @@ class FaceDetectionComponent extends React.Component<any, any> {
       height: video.clientHeight,
     };
     faceapi.matchDimensions(canvas, displaySize);
-
     this.detectionInterval.subscribe(() => this.detectFace(faceMatcher));
   }
 
@@ -179,13 +177,27 @@ class FaceDetectionComponent extends React.Component<any, any> {
     }
   }
 
+  async end() {
+    this.onAlertsObserver.complete();
+    await service.end(this.session.id);
+    this.setState({ ended: true });
+    service.clearSession();
+    window.location.href = "/";
+  }
   render() {
     return (
-      <div
-        className={"video-container" + (this.state.hasAlert ? " danger" : "")}
-      >
-        <video ref={this.videoRef}></video>
-        <canvas ref={this.canvasRef} id="canvas"></canvas>
+      <div>
+        <div
+          className={"video-container" + (this.state.hasAlert ? " danger" : "")}
+        >
+          <video ref={this.videoRef}></video>
+          <canvas ref={this.canvasRef} id="canvas"></canvas>
+        </div>
+        <div className="button-wrapper">
+          <button className="input" onClick={() => this.end()}>
+            Finir
+          </button>
+        </div>
       </div>
     );
   }
