@@ -2,7 +2,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./FaceDetectionComponent.css";
 import * as faceapi from "face-api.js";
-import { resizeResults } from "face-api.js";
+import { FaceMatcher, resizeResults, SsdMobilenetv1Options } from "face-api.js";
 import * as service from "../default-service";
 
 class FaceDetectionComponent extends React.Component {
@@ -20,120 +20,81 @@ class FaceDetectionComponent extends React.Component {
 
   async componentDidMount() {
     await Promise.all([
-      faceapi.nets.tinyFaceDetector.loadFromUri("/models"),
       faceapi.nets.faceLandmark68Net.loadFromUri("/models"),
       faceapi.nets.faceRecognitionNet.loadFromUri("/models"),
-      faceapi.nets.faceExpressionNet.loadFromUri("/models"),
       faceapi.nets.ssdMobilenetv1.loadFromUri("/models"),
     ]);
 
     const stream = await navigator.mediaDevices.getUserMedia({
       video: {
         facingMode: "user",
-        width: 2000,
+        width: 1200,
       },
     });
 
-    console.log("video");
-
     const video = this.videoRef.current; // curent;
-    //@ts-ignore
     video.srcObject = stream;
-    //@ts-ignore
     video.play();
     console.log("recong");
 
-    this.recognizeFaces();
+    this.initFaceMatcher();
   }
 
   //const video = document.querySelector('video')
 
-  loadLabeledImages() {
-    console.log("label image");
-    //const labels = ['Black Widow', 'Captain America', 'Hawkeye' , 'Jim Rhodes', 'Tony Stark', 'Thor', 'Captain Marvel']
-    const labels = ["chaima", "chaima2", "leo"]; // for WebCam
-    return Promise.all(
-      labels.map(async (label) => {
-        console.log("map");
+  async loadStudentFaceDescriptor() {
+    const img = await faceapi.fetchImage(this.session.img);
 
-        const descriptions = [];
-        for (let i = 1; i <= 1; i++) {
-          const img = await faceapi.fetchImage(`Etudiant/${label}.jpg`);
-          console.log("img");
+    const detection = await faceapi
+      .detectSingleFace(img, new SsdMobilenetv1Options({ minConfidence: 0.4 }))
+      .withFaceLandmarks()
+      .withFaceDescriptor();
 
-          const detections = await faceapi
-            .detectSingleFace(img)
-            .withFaceLandmarks()
-            .withFaceDescriptor();
-          if (!detections) {
-            throw new Error(`no faces detected for ${label}`);
-          }
-          console.log("hey");
-
-          console.log(label + i + JSON.stringify(detections));
-          descriptions.push(detections.descriptor);
-
-          console.log("Faces Loaded |");
-          document.body.append(label + " Faces Loaded | ");
-          return new faceapi.LabeledFaceDescriptors(label, descriptions);
-        }
-      })
-    );
+    if (!detection) {
+      throw new Error(`no face detected for in the student image `);
+    }
+    return detection;
   }
 
-  async recognizeFaces() {
-    console.log(" recognizeFaces() ");
-    const labeledDescriptors = await this.loadLabeledImages();
-    console.log("labeledDescriptors");
-    const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.5);
-
-    console.log(labeledDescriptors.values.toString);
-    console.log("addacitionlisteneer");
+  async detectFace(faceMatcher: FaceMatcher) {
     const video = this.videoRef.current;
-    console.log(video);
-    //@ts-ignore
     const canvas = this.canvasRef.current;
 
-    //@ts-ignore
     const displaySize = {
       width: video.clientWidth,
       height: video.clientHeight,
     };
-    //faceapi.matchDimensions(canvas, displaySize)
 
-    setInterval(async () => {
-      //@ts-ignore
-      const detections = await faceapi
-        .detectAllFaces(video)
-        .withFaceLandmarks()
-        .withFaceDescriptors();
-      //number of persons
-      // we will send this information each 10 seconde
-      console.log(detections.length);
+    const detections = await faceapi
+      .detectAllFaces(video, new SsdMobilenetv1Options({ minConfidence: 0.4 }))
+      .withFaceLandmarks()
+      .withFaceDescriptors();
 
-      const resizedDetections = faceapi.resizeResults(detections, displaySize);
-      //@ts-ignore
-      canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    const resizedDetections = faceapi.resizeResults(detections, displaySize);
+    canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
 
-      const results = resizedDetections.map((d) => {
-        return faceMatcher.matchDescriptor(d.descriptor);
-      });
-      //CHAIMA
+    resizedDetections.forEach(({ detection, descriptor }) => {
+      const label = faceMatcher.findBestMatch(descriptor).toString();
+      const options = { label };
+      const drawBox = new faceapi.draw.DrawBox(detection.box, options);
+      drawBox.draw(canvas);
+    });
+  }
 
-      console.log("starting drawing");
-      results.forEach((result, i) => {
-        console.log("drawing");
-        console.log("result ==>", results);
+  async initFaceMatcher() {
+    const studentFaceDescriptor = await this.loadStudentFaceDescriptor();
+    const faceMatcher = new faceapi.FaceMatcher(studentFaceDescriptor, 0.6);
 
-        const box = resizedDetections[i].detection.box;
+    const video = this.videoRef.current;
+    const canvas = this.canvasRef.current;
 
-        const drawBox = new faceapi.draw.DrawBox(box, {
-          label: results.toString(),
-        });
+    const displaySize = {
+      width: video.clientWidth,
+      height: video.clientHeight,
+    };
+    faceapi.matchDimensions(canvas, displaySize);
 
-        drawBox.draw(canvas);
-      });
-    }, 100);
+    setInterval(() => this.detectFace(faceMatcher), 100);
   }
 
   render() {
