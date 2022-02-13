@@ -2,20 +2,37 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./FaceDetectionComponent.css";
 import * as faceapi from "face-api.js";
-import { FaceMatcher, resizeResults, SsdMobilenetv1Options } from "face-api.js";
+import {
+  FaceMatcher,
+  ObjectDetection,
+  resizeResults,
+  SsdMobilenetv1Options,
+} from "face-api.js";
 import * as service from "../default-service";
+import { match } from "assert";
+import { debounce, delay, interval, Subject, timer } from "rxjs";
+import Alert, { AlertType } from "../alert.interface";
 
-class FaceDetectionComponent extends React.Component {
+class FaceDetectionComponent extends React.Component<any, any> {
   videoRef: any;
   canvasRef: any;
   session: any;
+
+  detectionPerSecond = 10; // run 10 detection per second
+  detectionInterval = interval(1000 / this.detectionPerSecond); // how many detections to run per second
+  alertsPerMinute = 1000; // how many alerts to report per minute
+  onAlertsObserver = new Subject<Alert>();
+  clearAlertObserver = new Subject<void>(); // used to toggle alert css class
+
+  clearAlert() {
+    this.setState({ hasAlert: false });
+  }
   constructor(props: any) {
     super(props);
     this.videoRef = React.createRef();
     this.canvasRef = React.createRef();
     this.session = service.getSession();
-
-    //this.image = 'http://localhost:5000/static/images/rami.jpeg';
+    this.state = { hasAlert: false };
   }
 
   async componentDidMount() {
@@ -38,9 +55,41 @@ class FaceDetectionComponent extends React.Component {
     console.log("recong");
 
     this.initFaceMatcher();
+    this.onAlertsObserver
+      .pipe(debounce(() => timer((60 * 1000) / this.alertsPerMinute)))
+      .subscribe(this.onAlert.bind(this));
+    this.clearAlertObserver
+      .pipe(
+        delay(500)
+      )
+      .subscribe(this.clearAlert.bind(this));
   }
 
-  //const video = document.querySelector('video')
+  getScreenshot(): Promise<Blob> {
+    const video = this.videoRef.current;
+    const scale = 1;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.clientWidth * scale;
+    canvas.height = video.clientHeight * scale;
+    canvas
+      .getContext("2d")
+      ?.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+    return new Promise((res, rej) => {
+      canvas.toBlob((blob) => {
+        if (blob === null) rej();
+        else res(blob);
+      }, "image/png");
+    });
+  }
+
+  async onAlert(predictionMeta: Alert) {
+    this.setState({ hasAlert: true });
+
+    const img = await this.getScreenshot();
+
+    //this.alertImage.nativeElement.src = URL.createObjectURL(img);
+  }
 
   async loadStudentFaceDescriptor() {
     const img = await faceapi.fetchImage(this.session.img);
@@ -72,18 +121,23 @@ class FaceDetectionComponent extends React.Component {
 
     const resizedDetections = faceapi.resizeResults(detections, displaySize);
     canvas.getContext("2d").clearRect(0, 0, canvas.width, canvas.height);
+    const results = resizedDetections.map(({ detection, descriptor }) => {
+      const match = faceMatcher.findBestMatch(descriptor);
+      return { detection, match };
+    });
 
-    resizedDetections.forEach(({ detection, descriptor }) => {
-      const label = faceMatcher.findBestMatch(descriptor).toString();
-      const options = { label };
+    results.forEach(({ detection, match }) => {
+      const options = { label: match.toString() };
       const drawBox = new faceapi.draw.DrawBox(detection.box, options);
       drawBox.draw(canvas);
     });
+
+    this.analyzeResults(results);
   }
 
   async initFaceMatcher() {
     const studentFaceDescriptor = await this.loadStudentFaceDescriptor();
-    const faceMatcher = new faceapi.FaceMatcher(studentFaceDescriptor, 0.6);
+    const faceMatcher = new faceapi.FaceMatcher(studentFaceDescriptor, 0.7); // if distance is more thatn 0.7 then it's considered unknown
 
     const video = this.videoRef.current;
     const canvas = this.canvasRef.current;
@@ -94,12 +148,42 @@ class FaceDetectionComponent extends React.Component {
     };
     faceapi.matchDimensions(canvas, displaySize);
 
-    setInterval(() => this.detectFace(faceMatcher), 100);
+    this.detectionInterval.subscribe(() => this.detectFace(faceMatcher));
+  }
+
+  analyzeResults(
+    detections: { match: faceapi.FaceMatch; detection: faceapi.FaceDetection }[]
+  ) {
+    let alertDetected = false;
+    if (detections.length > 1) {
+      // multiple faces have been detected
+
+      this.onAlertsObserver.next({
+        type: AlertType.multipleFace,
+        sessionId: this.session.id,
+      });
+
+      alertDetected = true;
+    }
+    for (const { match } of detections) {
+      if (match.label === "unknown") {
+        this.onAlertsObserver.next({
+          type: AlertType.strangeFace,
+          sessionId: this.session.id,
+        });
+        alertDetected = true;
+      }
+    }
+    if (!alertDetected) {
+      this.clearAlertObserver.next();
+    }
   }
 
   render() {
     return (
-      <div className="video-container">
+      <div
+        className={"video-container" + (this.state.hasAlert ? " danger" : "")}
+      >
         <video ref={this.videoRef}></video>
         <canvas ref={this.canvasRef} id="canvas"></canvas>
       </div>
