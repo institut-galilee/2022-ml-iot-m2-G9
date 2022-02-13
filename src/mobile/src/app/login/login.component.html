@@ -1,0 +1,14 @@
+<div class="form-wrapper">
+  <div class="form">
+    <div>
+      <img src="../../assets/instruction.jpg" />
+      <p>Veuillez entrer l'identifiant de session affiché sur l'écran de l'ordinateur portables. <br /> <br /> Une fois
+        le
+        téléphone est connecté. <br />Posez-le sur votre tête face à votre écran</p>
+      <input class="input" placeholder="Session Id" type="text" name="session-id" #session />
+      <button class="input" (click)="connect(session.value)">
+        Se Connecter
+      </button>
+    </div>
+  </div>
+</div>

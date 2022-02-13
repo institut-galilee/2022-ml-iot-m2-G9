@@ -1,9 +1,9 @@
 import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
-import { interval , Subject, timer } from 'rxjs';
+import { interval, Subject, timer } from 'rxjs';
 import Alert, { AlertType } from './alert.interface';
-import {  delay, debounce } from 'rxjs/operators';
+import { delay, debounce } from 'rxjs/operators';
 
 
 interface Prediction {
@@ -28,12 +28,12 @@ export class ObjectRecognitionComponent implements AfterViewInit {
 
   hasAlert = false;
 
-  detectionRate = 10;
-  detectionInterval = interval(1000 / this.detectionRate);
+  detectionPerSecond = 10; // run 10 detection per second
+  detectionInterval = interval(1000 / this.detectionPerSecond); // how many detections to run per second
   onPredicitionsObserver = new Subject<Prediction>();
   onAlertsObserver = new Subject<Alert>();
-  isScreenInView = new Subject<boolean>();
-  clearAlertObserver = new Subject<void>();
+  isScreenInView = new Subject<boolean>(); // track if screen in view
+  clearAlertObserver = new Subject<void>(); // used to toggle alert css class
   constructor() { }
   ngAfterViewInit(): void {
 
@@ -113,12 +113,13 @@ export class ObjectRecognitionComponent implements AfterViewInit {
     const canvas = document.createElement('canvas');
     canvas.width = video.clientWidth * scale;
     canvas.height = video.clientHeight * scale;
-    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
 
 
     return new Promise((res, rej) => {
       canvas.toBlob((blob) => {
-        res(blob);
+        if (blob === null) { rej(); }
+        else { res(blob); }
       }, 'image/png');
     });
 
@@ -149,7 +150,7 @@ export class ObjectRecognitionComponent implements AfterViewInit {
       this.detectFrame(this.video.nativeElement, model);
     });
     this.onPredicitionsObserver.subscribe(this.onPredictions.bind(this));
-    this.onAlertsObserver.subscribe(this.onAlert.bind(this));
+    this.onAlertsObserver.pipe(debounce(() => timer(200))).subscribe(this.onAlert.bind(this));
     this.clearAlertObserver.pipe(debounce(() => timer(200)), delay(500)).subscribe(this.clearAlert.bind(this));
   }
 
