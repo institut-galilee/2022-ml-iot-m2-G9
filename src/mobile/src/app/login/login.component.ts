@@ -19,7 +19,7 @@ export class LoginComponent implements OnInit {
   async connect(sessionId: string) {
 
     try {
-      const result = await this.defaultService.connect(sessionId).toPromise();
+      const result = await this.defaultService.connect(sessionId);
       console.log(result);
       this.defaultService.saveSession(result);
       this.router.navigate(['/start']);

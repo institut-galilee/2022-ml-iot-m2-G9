@@ -179,7 +179,9 @@ class FaceDetectionComponent extends React.Component<any, any> {
 
   async end() {
     this.onAlertsObserver.complete();
-    await service.end(this.session.id);
+    try {
+      await service.end(this.session.id);
+    } catch (ex) {}
     this.setState({ ended: true });
     service.clearSession();
     window.location.href = "/";

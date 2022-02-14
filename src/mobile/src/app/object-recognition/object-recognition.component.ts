@@ -3,7 +3,9 @@ import * as cocoSsd from '@tensorflow-models/coco-ssd';
 import '@tensorflow/tfjs';
 import { interval, Subject, timer } from 'rxjs';
 import Alert, { AlertType } from './alert.interface';
-import { delay, debounce } from 'rxjs/operators';
+import { delay, debounce, throttleTime, distinctUntilChanged } from 'rxjs/operators';
+import { DefaultService } from '../default.service';
+import { unique } from '@tensorflow/tfjs';
 
 
 interface Prediction {
@@ -27,14 +29,18 @@ export class ObjectRecognitionComponent implements AfterViewInit {
   @ViewChild('alertImage') alertImage: ElementRef;
 
   hasAlert = false;
-
+  alertsPerMinute = 10; // how many alerts to report per minute
   detectionPerSecond = 10; // run 10 detection per second
   detectionInterval = interval(1000 / this.detectionPerSecond); // how many detections to run per second
   onPredicitionsObserver = new Subject<Prediction>();
   onAlertsObserver = new Subject<Alert>();
   isScreenInView = new Subject<boolean>(); // track if screen in view
   clearAlertObserver = new Subject<void>(); // used to toggle alert css class
-  constructor() { }
+
+  session: any;
+  constructor(private defaultService: DefaultService) {
+    this.session = this.defaultService.getSession();
+  }
   ngAfterViewInit(): void {
 
 
@@ -43,8 +49,8 @@ export class ObjectRecognitionComponent implements AfterViewInit {
       .getUserMedia({
         audio: false,
         video: {
-          facingMode: 'user',
-          aspectRatio: 1.7,
+          facingMode: 'environment',
+          width: window.innerWidth,
           frameRate: 30
         }
       })
@@ -88,6 +94,7 @@ export class ObjectRecognitionComponent implements AfterViewInit {
     } else if (screenInView === 1) { // only one screen in the view
       this.isScreenInView.next(true);
     } else {  // multiple screen in the view
+      this.isScreenInView.next(true);
       this.onAlertsObserver.next({ type: AlertType.multipleScreen, sessionId: '' });
     }
 
@@ -104,26 +111,24 @@ export class ObjectRecognitionComponent implements AfterViewInit {
 
   }
 
-
   getScreenshot(): Promise<Blob> {
-
-
     const video = this.video.nativeElement;
     const scale = 1;
     const canvas = document.createElement('canvas');
-    canvas.width = video.clientWidth * scale;
-    canvas.height = video.clientHeight * scale;
-    canvas.getContext('2d')?.drawImage(video, 0, 0, canvas.width, canvas.height);
-
+    canvas.width = 256;
+    canvas.height = (video.clientHeight / video.clientWidth) * canvas.width;
+    canvas
+      .getContext('2d')
+      ?.drawImage(video, 0, 0, canvas.width, canvas.height);
 
     return new Promise((res, rej) => {
       canvas.toBlob((blob) => {
         if (blob === null) { rej(); }
         else { res(blob); }
-      }, 'image/png');
+      }, 'image/jpg');
     });
-
   }
+
 
   onPredictions(predictions: Prediction[]) {
     this.renderPredictions(predictions);
@@ -133,16 +138,23 @@ export class ObjectRecognitionComponent implements AfterViewInit {
   clearAlert() {
     this.hasAlert = false;
   }
-  async onAlert(predictionMeta: Alert) {
+  async onAlert(alert: Alert) {
 
     this.hasAlert = true;
     this.clearAlertObserver.next();
 
-    const img = await this.getScreenshot();
+    try {
+      const img = await this.getScreenshot();
+      await this.defaultService.registerEvent(this.session.id, alert, img);
+    } catch (ex) { }
 
-    this.alertImage.nativeElement.src = URL.createObjectURL(img);
 
+  }
 
+  async updateScreenInView(isScreenInView: boolean) {
+    try {
+      await this.defaultService.updateScreenInView(this.session.id, isScreenInView);
+    } catch (ex) { }
   }
   initDetection(model) {
 
@@ -150,8 +162,11 @@ export class ObjectRecognitionComponent implements AfterViewInit {
       this.detectFrame(this.video.nativeElement, model);
     });
     this.onPredicitionsObserver.subscribe(this.onPredictions.bind(this));
-    this.onAlertsObserver.pipe(debounce(() => timer(200))).subscribe(this.onAlert.bind(this));
+    this.onAlertsObserver
+      .pipe(throttleTime((60 * 1000) / this.alertsPerMinute))
+      .subscribe(this.onAlert.bind(this));
     this.clearAlertObserver.pipe(debounce(() => timer(200)), delay(500)).subscribe(this.clearAlert.bind(this));
+    this.isScreenInView.pipe(distinctUntilChanged()).subscribe(this.updateScreenInView);
   }
 
 
@@ -165,6 +180,7 @@ export class ObjectRecognitionComponent implements AfterViewInit {
     const c = this.canvas.nativeElement;
     c.width = this.video.nativeElement.clientWidth;
     c.height = this.video.nativeElement.clientHeight;
+
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     // Font options.

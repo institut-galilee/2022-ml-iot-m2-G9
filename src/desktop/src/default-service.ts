@@ -35,7 +35,6 @@ function blobToBase64(blob: Blob) {
     });
 }
 export async function registerEvent(sessionId: string, alert: Alert, image?: Blob) {
-    console.log(image);
     let data: any = { ...alert };
 
     if (image) {

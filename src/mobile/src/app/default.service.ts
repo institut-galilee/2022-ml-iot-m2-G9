@@ -13,17 +13,17 @@ export class DefaultService {
 
 
   post(alert: Alert) {
-    return this.httpClient.post(this.base + '/alerts', alert);
+    return this.httpClient.post(this.base + '/alerts', alert).toPromise();
   }
   connect(sessionId: string) {
-    return this.httpClient.post(this.base + '/connect/' + sessionId, {});
+    return this.httpClient.post(this.base + '/connect/' + sessionId, {}).toPromise();
   }
 
   updateScreenInView(sessionId: string, isScreenInView: boolean) {
-    return this.httpClient.post(this.base + '/update-screen-in-view/' + sessionId, { isScreenInView });
+    return this.httpClient.post(this.base + '/update-screen-in-view/' + sessionId, { isScreenInView }).toPromise();
   }
   hasStarted(sessionId: string) {
-    return this.httpClient.get(this.base + '/started/' + sessionId);
+    return this.httpClient.get(this.base + '/started/' + sessionId).toPromise();
   }
 
   saveSession(session: any) {
@@ -36,6 +36,27 @@ export class DefaultService {
 
   clearSession() {
     localStorage.removeItem('session');
+  }
+
+
+  blobToBase64(blob: Blob) {
+    return new Promise((resolve, _) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  async registerEvent(sessionId: string, alert: Alert, image?: Blob) {
+    const data: any = { ...alert };
+
+    if (image) {
+      data.photo = await this.blobToBase64(image);
+
+    }
+
+    return this.httpClient.post(this.base + '/register/' + sessionId, data).toPromise();
+
   }
 
 }

@@ -8,7 +8,6 @@ import json
 from flask_cors import CORS
 import base64
 
-from itsdangerous import base64_decode
 
 users = [
     {
@@ -28,9 +27,6 @@ app = Flask(__name__)
 CORS(app)
 
 
-@app.route("/")
-def hello_world():
-    return "<p>Hello, World!</p>"
 
 
 def find_user(id):
@@ -62,6 +58,15 @@ def getEvents(session_id):
 @app.route('/register/<session_id>', methods=['POST'])
 def register(session_id):
     body = request.get_json()
+    session = find_session(session_id)
+
+    if session is None:
+        return make_response('Session not found', 404)
+
+    if session['ended'] == True or session['started'] == False: #ignore events if the session has ended or has not yet started 
+        return make_response('OK', 200)
+
+
     body["session_id"] = session_id
     if 'photo' in body.keys():
         photo = body['photo'][22:]
@@ -73,8 +78,8 @@ def register(session_id):
         del body["photo"]
         body["image"] = request.host_url + imagePath
 
+    body["time"] = datetime.datetime.now()
     events.append(body)
-    print(events)
     return make_response('OK', 200)
 
 
@@ -94,10 +99,11 @@ def login():
     session['img'] = request.host_url + user['img']
     session['NE'] = user['NE']
     session['started'] = False
-    session['camera_in_view'] = False
+    session['screen-in-view'] = False
     session['start-date'] = None
     session['end-date'] = None
     session['ended'] = False
+    session['camera-view'] = False
     sessions.append(session)
 
     return make_response(jsonify(session), 200)
@@ -108,8 +114,8 @@ def start(session_id):
 
     session = find_session(session_id)
 
-    if session is None or session['camera_in_view'] == False:
-        return make_response('Camera not in view', 200)
+    if session is None or session['screen-in-view'] == False:
+        return make_response('Screen is not in view', 400)
 
     session['started'] = True
     session['start-date'] = datetime.datetime.now()
@@ -127,3 +133,41 @@ def end(session_id):
     session['ended'] = True
     session['end-date'] = datetime.datetime.now()
     return make_response('OK', 200)
+
+
+@app.route('/connect/<session_id>', methods=['POST'])
+def connect(session_id):
+
+    session = find_session(session_id)
+
+    if session is None:
+        return make_response('Session not found', 404)
+
+    session['camera-view'] = True
+
+    return make_response(jsonify(session), 200)
+
+
+@app.route('/update-screen-in-view/<session_id>', methods=['POST'])
+def updateScreenInView(session_id):
+
+    body = request.get_json()
+
+    session = find_session(session_id)
+
+    if session is None:
+        return make_response('Session not found', 404)
+
+    session['screen-in-view'] = body['isScreenInView']
+    return make_response('OK', 200)
+
+
+@app.route('/started/<session_id>', methods=['GET'])
+def started(session_id):
+
+    session = find_session(session_id)
+
+    if session is None:
+        return make_response('Session not found', 404)
+
+    return make_response(jsonify({'started':  session['started']}), 200)
