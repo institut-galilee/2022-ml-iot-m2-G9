@@ -20,6 +20,7 @@ export class DefaultService {
   }
 
   updateScreenInView(sessionId: string, isScreenInView: boolean) {
+    console.log('post update screen in view')
     return this.httpClient.post(this.base + '/update-screen-in-view/' + sessionId, { isScreenInView }).toPromise();
   }
   hasStarted(sessionId: string) {

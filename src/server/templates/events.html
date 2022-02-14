@@ -1,0 +1,98 @@
+<html !DOCTYPE>
+
+
+<head>
+    <title> Admin Dashboard </title>
+    <style>
+        body,
+        html {
+            color: #333;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: center;
+
+        }
+
+        table td {
+            border: solid 1px #333;
+
+            padding: 5px;
+        }
+
+        table th {
+            border: solid 1px #333;
+            font-weight: bold;
+            padding: 10px;
+        }
+
+        .image-cell img {
+            width: 120px;
+        }
+
+        a {
+            text-decoration: none;
+            color: #619a92;
+        }
+    </style>
+</head>
+
+<body>
+
+    <h1> <a href="/admin">Admin Dashboard </a></h1>
+
+    <table>
+        <thead>
+            <th> ID </th>
+            <th> Nom </th>
+            <th> Numéro Etudiant </th>
+            <th> Photo Etudiant</th>
+            <th>Commencé A</th>
+            <th>Fini A</th>
+            <th>Evenement</th>
+        </thead>
+        <tbody>
+            <tr>
+                <td>{{ session['id']}}</td>
+                <td>{{ session['name']}}</td>
+                <td>{{ session['NE']}}</td>
+
+                <td class="image-cell"><img src="{{session['img']}}" /> </td>
+
+                <td>{{ session['start-date']}}</td>
+                <td>{{ session['end-date']}}</td>
+                <td> <a href="/admin/events/{{session['id']}}"> Evenements </a></td>
+            </tr>
+
+        </tbody>
+    </table>
+
+    <br/><br/>
+    <table>
+        <thead>
+            <th> ID </th>
+            <th> Type </th>
+            <th> Date </th>
+            <th> Photo </th>
+
+        </thead>
+        <tbody>
+            {% for event in events: %}
+            <tr>
+                <td>{{ event['id']}}</td>
+                <td>{{ event['type']}}</td>
+                <td>{{ event['time']}}</td>
+                <td class="image-cell"><img src="{{event['image']}}" /> </td>
+            </tr>
+
+            {% endfor %}
+        </tbody>
+    </table>
+
+
+
+</body>
+
+</html>

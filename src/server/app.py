@@ -2,7 +2,7 @@ from copy import copy
 from crypt import methods
 import datetime
 from telnetlib import STATUS
-from flask import Flask, request, make_response, jsonify
+from flask import Flask, redirect, request, make_response, jsonify, render_template
 import uuid
 import json
 from flask_cors import CORS
@@ -27,8 +27,6 @@ app = Flask(__name__)
 CORS(app)
 
 
-
-
 def find_user(id):
     for user in users:
         if user['NE'] == id:
@@ -43,6 +41,22 @@ def find_session(id):
             return session
 
     return None
+
+
+@app.route('/admin', methods=['GET'])
+def admin():
+    return render_template('./index.html', sessions=sessions)
+
+
+@app.route('/admin/events/<session_id>', methods=['GET'])
+def admin_events(session_id):
+    session = find_session(session_id)
+    if session is None:
+        return redirect('/admin')
+
+    evs = list(filter(lambda x: x['session_id'] == session_id, events))
+
+    return render_template('./events.html', session=session, events=evs)
 
 
 @app.route('/sessions/', methods=['GET'])
@@ -63,9 +77,9 @@ def register(session_id):
     if session is None:
         return make_response('Session not found', 404)
 
-    if session['ended'] == True or session['started'] == False: #ignore events if the session has ended or has not yet started 
+    # ignore events if the session has ended or has not yet started
+    if session['ended'] == True or session['started'] == False:
         return make_response('OK', 200)
-
 
     body["session_id"] = session_id
     if 'photo' in body.keys():
@@ -79,6 +93,7 @@ def register(session_id):
         body["image"] = request.host_url + imagePath
 
     body["time"] = datetime.datetime.now()
+    body["id"] = len(events)
     events.append(body)
     return make_response('OK', 200)
 
@@ -98,6 +113,7 @@ def login():
     session['id'] = str(uuid.uuid4())[:8]
     session['img'] = request.host_url + user['img']
     session['NE'] = user['NE']
+    session['name'] = user['name']
     session['started'] = False
     session['screen-in-view'] = False
     session['start-date'] = None

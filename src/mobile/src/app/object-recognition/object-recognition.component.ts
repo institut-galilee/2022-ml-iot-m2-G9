@@ -152,8 +152,13 @@ export class ObjectRecognitionComponent implements AfterViewInit {
   }
 
   async updateScreenInView(isScreenInView: boolean) {
+    console.log("update screen", isScreenInView);
     try {
+      console.log("update screen2", isScreenInView);
+
       await this.defaultService.updateScreenInView(this.session.id, isScreenInView);
+      console.log("update screen3", isScreenInView);
+
     } catch (ex) { }
   }
   initDetection(model) {
@@ -166,7 +171,7 @@ export class ObjectRecognitionComponent implements AfterViewInit {
       .pipe(throttleTime((60 * 1000) / this.alertsPerMinute))
       .subscribe(this.onAlert.bind(this));
     this.clearAlertObserver.pipe(debounce(() => timer(200)), delay(500)).subscribe(this.clearAlert.bind(this));
-    this.isScreenInView.pipe(distinctUntilChanged()).subscribe(this.updateScreenInView);
+    this.isScreenInView.pipe(distinctUntilChanged()).subscribe(this.updateScreenInView.bind(this));
   }
 
 
