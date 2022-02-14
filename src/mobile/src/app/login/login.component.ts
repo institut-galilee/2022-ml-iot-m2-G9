@@ -24,11 +24,12 @@ export class LoginComponent implements OnInit {
       this.defaultService.saveSession(result);
       this.router.navigate(['/start']);
     } catch (ex) {
+      console.log(ex);
       const alert = await this.alertController.create({
         cssClass: 'alert',
         header: 'Veuillez réessayer',
         subHeader: '',
-        message: 'La séance n\'existe pas.',
+        message: ex.message  +  ' La séance n\'existe pas.',
         buttons: ['OK']
       });
 

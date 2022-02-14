@@ -23,7 +23,7 @@ sessions = []
 events = []
 
 
-app = Flask(__name__)
+app = Flask(__name__ )
 CORS(app)
 
 

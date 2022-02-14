@@ -136,7 +136,7 @@ class FaceDetectionComponent extends React.Component<any, any> {
 
   async initFaceMatcher() {
     const studentFaceDescriptor = await this.loadStudentFaceDescriptor();
-    const faceMatcher = new faceapi.FaceMatcher(studentFaceDescriptor, 0.7); // if distance is more thatn 0.7 then it's considered unknown
+    const faceMatcher = new faceapi.FaceMatcher(studentFaceDescriptor, 0.75); // if distance is more thatn 0.7 then it's considered unknown
 
     const video = this.videoRef.current;
     const canvas = this.canvasRef.current;

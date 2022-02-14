@@ -2,7 +2,7 @@
   position: relative;
   display: inline-block;
   border: solid 5px transparent;
-  transition: border 0.5s ;
+  transition: border 0.5s;
 
   #canvas {
     position: absolute;
@@ -13,5 +13,10 @@
   }
   &.danger {
     border: solid 5px red;
+  }
+  img {
+    width: 100%;
+    position: relative;
+
   }
 }

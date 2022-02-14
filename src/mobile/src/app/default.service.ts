@@ -8,7 +8,7 @@ import Alert from './object-recognition/alert.interface';
 export class DefaultService {
 
 
-  base = 'http://localhost:5000';
+  base = 'http://192.168.1.100:5000';
   constructor(private httpClient: HttpClient) { }
 
 
@@ -48,14 +48,13 @@ export class DefaultService {
     });
   }
 
-  async registerEvent(sessionId: string, alert: Alert, image?: Blob) {
+  async registerEvent(sessionId: string, alert: Alert, image?: string) {
     const data: any = { ...alert };
 
     if (image) {
-      data.photo = await this.blobToBase64(image);
-
+      data.photo = image;
     }
-
+    console.log("register"); 
     return this.httpClient.post(this.base + '/register/' + sessionId, data).toPromise();
 
   }

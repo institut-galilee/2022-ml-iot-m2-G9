@@ -1,11 +1,12 @@
 import { AfterViewInit, Component, ElementRef, OnInit, ViewChild } from '@angular/core';
 import * as cocoSsd from '@tensorflow-models/coco-ssd';
+import * as tf from '@tensorflow/tfjs';
 import '@tensorflow/tfjs';
 import { interval, Subject, timer } from 'rxjs';
 import Alert, { AlertType } from './alert.interface';
 import { delay, debounce, throttleTime, distinctUntilChanged } from 'rxjs/operators';
 import { DefaultService } from '../default.service';
-import { unique } from '@tensorflow/tfjs';
+import { CameraPreview, CameraPreviewPictureOptions, CameraPreviewOptions, CameraPreviewDimensions } from '@awesome-cordova-plugins/camera-preview/ngx';
 
 
 interface Prediction {
@@ -14,7 +15,10 @@ interface Prediction {
   score: number;
 
 }
-
+interface PredictionResult {
+  image: string,
+  predictions: Prediction[]
+}
 
 
 @Component({
@@ -24,49 +28,41 @@ interface Prediction {
 })
 export class ObjectRecognitionComponent implements AfterViewInit {
 
-  @ViewChild('video') video: ElementRef;
+  //ViewChild('video') video: ElementRef;
   @ViewChild('canvas') canvas: ElementRef;
   @ViewChild('alertImage') alertImage: ElementRef;
 
   hasAlert = false;
   alertsPerMinute = 10; // how many alerts to report per minute
-  detectionPerSecond = 10; // run 10 detection per second
+  detectionPerSecond = 15; // run 10 detection per second
   detectionInterval = interval(1000 / this.detectionPerSecond); // how many detections to run per second
-  onPredicitionsObserver = new Subject<Prediction>();
+  onPredicitionsObserver = new Subject<PredictionResult>();
   onAlertsObserver = new Subject<Alert>();
   isScreenInView = new Subject<boolean>(); // track if screen in view
   clearAlertObserver = new Subject<void>(); // used to toggle alert css class
 
   session: any;
-  constructor(private defaultService: DefaultService) {
+  constructor(private defaultService: DefaultService, private cameraPreview: CameraPreview) {
     this.session = this.defaultService.getSession();
   }
   ngAfterViewInit(): void {
 
 
+    const cameraPreviewOpts: CameraPreviewOptions = {
+      x: 0,
+      y: 0,
+      width: window.screen.width,
+      height: window.screen.height,
+      camera: 'rear',
+      tapPhoto: false,
+      previewDrag: true,
+      toBack: true,
+      alpha: 1,
+      storeToFile: false
+    }
 
-    const webCamPromise = navigator.mediaDevices
-      .getUserMedia({
-        audio: false,
-        video: {
-          facingMode: 'environment',
-          width: window.innerWidth,
-          frameRate: 30
-        }
-      })
-      .then(stream => {
-        const video = this.video.nativeElement;
+    const webCamPromise = this.cameraPreview.startCamera(cameraPreviewOpts);
 
-        video.srcObject = stream;
-
-        return new Promise((resolve, reject) => {
-          video.onloadedmetadata = () => {
-            video.play();
-            resolve(undefined);
-          };
-        });
-
-      });
 
     const modelPromise = cocoSsd.load();
 
@@ -81,12 +77,12 @@ export class ObjectRecognitionComponent implements AfterViewInit {
 
   }
 
-  analyzePredictions(predictions: Prediction[]) {
+  analyzePredictions(predictionResult: PredictionResult) {
 
     // analyze how many screen in the view
     const screenClasses = ['cell phone', 'tv', 'laptop', 'mobile', 'screen'];
 
-
+    const predictions = predictionResult.predictions;
     const screenInView = predictions.filter(e => screenClasses.includes(e.class)).length;
 
     if (screenInView === 0) { // no screen in the view
@@ -95,7 +91,7 @@ export class ObjectRecognitionComponent implements AfterViewInit {
       this.isScreenInView.next(true);
     } else {  // multiple screen in the view
       this.isScreenInView.next(true);
-      this.onAlertsObserver.next({ type: AlertType.multipleScreen, sessionId: '' });
+      this.onAlertsObserver.next({ type: AlertType.multipleScreen, sessionId: this.session.id, meta: { image: predictionResult.image } });
     }
 
 
@@ -105,34 +101,18 @@ export class ObjectRecognitionComponent implements AfterViewInit {
 
     const personInView = predictions.filter(e => personClasses.includes(e.class)).length;
     if (personInView > 0) {
-      this.onAlertsObserver.next({ type: AlertType.person, sessionId: '' });
+      this.onAlertsObserver.next({ type: AlertType.person, sessionId: this.session.id, meta: { image: predictionResult.image } });
     }
 
 
   }
 
-  getScreenshot(): Promise<Blob> {
-    const video = this.video.nativeElement;
-    const scale = 1;
-    const canvas = document.createElement('canvas');
-    canvas.width = 256;
-    canvas.height = (video.clientHeight / video.clientWidth) * canvas.width;
-    canvas
-      .getContext('2d')
-      ?.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-    return new Promise((res, rej) => {
-      canvas.toBlob((blob) => {
-        if (blob === null) { rej(); }
-        else { res(blob); }
-      }, 'image/jpg');
-    });
-  }
 
 
-  onPredictions(predictions: Prediction[]) {
-    this.renderPredictions(predictions);
-    this.analyzePredictions(predictions);
+
+  onPredictions(predictionResult: PredictionResult) {
+    this.renderPredictions(predictionResult.predictions);
+    this.analyzePredictions(predictionResult);
 
   }
   clearAlert() {
@@ -144,7 +124,10 @@ export class ObjectRecognitionComponent implements AfterViewInit {
     this.clearAlertObserver.next();
 
     try {
-      const img = await this.getScreenshot();
+      console.log("take screenshot")
+      const img = alert.meta.image;
+      delete alert.meta.image;
+      console.log("screenshot taken");
       await this.defaultService.registerEvent(this.session.id, alert, img);
     } catch (ex) { }
 
@@ -152,19 +135,14 @@ export class ObjectRecognitionComponent implements AfterViewInit {
   }
 
   async updateScreenInView(isScreenInView: boolean) {
-    console.log("update screen", isScreenInView);
     try {
-      console.log("update screen2", isScreenInView);
-
       await this.defaultService.updateScreenInView(this.session.id, isScreenInView);
-      console.log("update screen3", isScreenInView);
-
     } catch (ex) { }
   }
   initDetection(model) {
 
     this.detectionInterval.subscribe(() => {
-      this.detectFrame(this.video.nativeElement, model);
+      this.detectFrame(model);
     });
     this.onPredicitionsObserver.subscribe(this.onPredictions.bind(this));
     this.onAlertsObserver
@@ -174,17 +152,41 @@ export class ObjectRecognitionComponent implements AfterViewInit {
     this.isScreenInView.pipe(distinctUntilChanged()).subscribe(this.updateScreenInView.bind(this));
   }
 
+  getImage(): Promise<HTMLImageElement> {
 
-  detectFrame(video, model) {
-    model.detect(video).then(predictions => {
-      this.onPredicitionsObserver.next(predictions);
+    return new Promise((res, rej) => {
+
+      this.cameraPreview.takePicture({ width: 256, height: 0, quality: 35 }).then((base64PictureData: string) => {
+        const image = new Image()
+        image.crossOrigin = 'anonymous'
+        image.src = 'data:image/jpeg;base64,' + base64PictureData;
+
+        image.width = window.screen.width;
+        image.height = window.screen.height;
+        image.onload = () => {
+          res(image);
+        }
+
+
+        this.alertImage.nativeElement.src = image.src;
+
+      });
+
+    });
+
+  }
+
+  async detectFrame(model: cocoSsd.ObjectDetection) {
+    const img = await this.getImage();
+    model.detect(tf.browser.fromPixels(img)).then(predictions => {
+      this.onPredicitionsObserver.next({ image: img.src, predictions: predictions });
     });
   };
 
   renderPredictions(predictions: Prediction[]) {
     const c = this.canvas.nativeElement;
-    c.width = this.video.nativeElement.clientWidth;
-    c.height = this.video.nativeElement.clientHeight;
+    c.width = window.screen.width;
+    c.height = window.screen.height;
 
     const ctx = c.getContext('2d');
     ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
