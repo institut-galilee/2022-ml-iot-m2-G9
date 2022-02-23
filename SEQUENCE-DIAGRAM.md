@@ -22,6 +22,7 @@ sequenceDiagram
     Server-->>WebApp: IsScreenInView
     end
 
+    par
     WebApp->>Server: POST /register/<session_id>
     Note over WebApp,Server: Events sent during an alarm
 
@@ -29,7 +30,7 @@ sequenceDiagram
 
     MobileApp->>Server: POST /register/<session_id>
     Note over MobileApp,Server: Events sent during an alarm
-
+    end
 
     WebApp->>Server: POST /end/<session_id>
    
